@@ -9,3 +9,4 @@ GPy
 pyswarm
 imbalanced-learn
 smt
+openpyxl
