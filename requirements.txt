@@ -4,4 +4,8 @@ numpy
 scikit-learn
 matplotlib
 seaborn
+tensorflow
+GPy
+pyswarm
+imbalanced-learn
 smt
