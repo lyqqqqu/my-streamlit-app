@@ -33,7 +33,7 @@ st.sidebar.title("注意事项")
 st.sidebar.write("""
 1. 请确保正确输入数据集之后，才能点击训练模型按钮。
 
-2. 目前该程序仍存在很多问题，优化目前只有高斯多核回归和粒子群结合是有效的，后续将不断完善。
+2. 目前该app分类还没有实现，回归中优化目前只有高斯多核回归和粒子群结合是有效的，后续将不断完善。
                  
 3. 高斯多核回归和粒子群结合的决策变量是权重，适应度是误差mape
 
@@ -434,7 +434,7 @@ with col2:
                             Y_test = y_test.values.reshape(-1, 1) if isinstance(y_test, (pd.Series, pd.DataFrame)) else y_test.reshape(-1, 1)
 
                             # 调用 PSO 优化函数
-                            st.write("正在运行粒子群优化高斯多核回归，请稍候...")
+                            # st.write("正在运行粒子群优化高斯多核回归，请稍候...")
                             y_pred, best_r2, best_rmse, best_mape, best_decision_variables, best_mape = optimize_gaussian_multikernel(
                                     X_train, Y_train, X_test, Y_test,
                                     lb=[0.1, 0.1, 0.1], ub=[10, 10, 10],
