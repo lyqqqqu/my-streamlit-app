@@ -515,3 +515,4 @@ with col3:
         # 提供下载预测结果的功能
         csv = predict_data.to_csv(index=False)
         st.download_button(label="下载预测结果", data=csv, file_name='prediction_results.csv', mime='text/csv')
+        st.cache_data.clear()
