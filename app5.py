@@ -14,10 +14,31 @@ from Regression import gaussian_multikernel_model
 import time;
 from smt.surrogate_models import RBF,QP,GENN
 from optimize_gaussian_multikernel import optimize_gaussian_multikernel
+from sklearn.preprocessing import StandardScaler, MinMaxScaler
+
+
 
 # 页面设置
 st.set_page_config(page_title="多元回归预测和分类模块", layout="wide")
+# 标志：仅在第一次加载页面时触发气球
+if "balloons_shown" not in st.session_state:
+    st.session_state["balloons_shown"] = False
 
+if not st.session_state["balloons_shown"]:
+    st.balloons()  # 显示气球
+    st.session_state["balloons_shown"] = True  # 设置标志，确保只显示一次
+
+# 在侧边栏显示注意事项
+st.sidebar.title("注意事项")
+st.sidebar.write("""
+1. 请确保正确输入数据集之后，才能点击训练模型按钮。
+
+2. 目前该程序仍存在很多问题，优化目前只有高斯多核回归和粒子群结合是有效的，后续将不断完善。
+                 
+3. 高斯多核回归和粒子群结合的决策变量是权重，适应度是误差mape
+
+4. 如果遇到问题，可多尝试不同方法的组合。
+""")
 # 页面标题
 st.title("多元回归预测和分类模块")
 
@@ -27,22 +48,49 @@ col1, col2, col3 = st.columns([3, 3, 3])
 # 左侧栏：数据输入和预处理
 with col1:
     st.header("数据输入与处理")
-    
+      
     # 文件上传模块
-    uploaded_file = st.file_uploader("选择一个 Excel 或 CSV 文件", type=["csv", "xlsx"])
+    uploaded_file = st.file_uploader("选择一个 Excel 或 CSV 文件上传", type=["csv", "xlsx"])
+    
     if uploaded_file:
         if uploaded_file.name.endswith('.csv'):
             data = pd.read_csv(uploaded_file)
         else:
             data = pd.read_excel(uploaded_file)
-        st.write("数据集预览：")
-        st.dataframe(data.head())
+
+        # 添加是否进行预处理的选择按钮
+        preprocess_option = st.radio("是否进行数据预处理:", ["无", "是"])
         
+        if preprocess_option == "是":
+            # 用户选择进行预处理后，进一步选择是否进行标准化或归一化
+            method_option = st.selectbox("数据预处理方法:", options=["标准化", "归一化"])
+
+            # 自动选择所有数值型列进行处理
+            numeric_columns = data.select_dtypes(include=["float64", "int64"]).columns #对所有数值列进行预处理 
+            if numeric_columns.empty:
+                st.warning("数据集中没有数值型列，无法进行标准化或归一化处理！")
+            else:
+                if method_option == "标准化":
+                    # 标准化处理
+                    scaler = StandardScaler()
+                    data[numeric_columns] = scaler.fit_transform(data[numeric_columns])
+                elif method_option == "归一化":
+                    # 归一化处理 (0-1)
+                    scaler = MinMaxScaler()
+                    data[numeric_columns] = scaler.fit_transform(data[numeric_columns])
+
+        st.write("(处理好的)数据集预览：")
+        st.dataframe(data.head())
+
         # 特征和标签选择
         st.subheader("选择特征和输出列")
         all_columns = data.columns.tolist()
         output_column = st.selectbox("选择输出列（默认最后一列）", options=all_columns, index=len(all_columns) - 1)
         feature_columns = st.multiselect("选择特征列（默认除输出列外所有列）", options=all_columns, default=[col for col in all_columns if col != output_column])
+
+        # 确保用户选择了特征列
+        if not feature_columns:
+            st.warning("请至少选择一个特征列进行建模！")
 
         # 数据集划分比例选择
         st.subheader("数据集划分比例")
@@ -54,15 +102,24 @@ with col1:
         # 随机种子选择
         use_random_seed = st.checkbox("是否使用随机种子", value=False)
         if use_random_seed:
-            random_seed = st.number_input("输入随机种子", min_value=1, max_value=10000, value=6)
+            random_seed = st.number_input("输入随机种子", min_value=1, max_value=10000, value=42)
         else:
-            random_seed = None
+            random_seed = 42  # 给定一个默认种子值
 
         # 数据划分
         X = data[feature_columns]
         y = data[output_column]
-        X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=test_ratio, random_state=random_seed)
-        # 确保 y_train 和 y_test 是二维数组，以兼容 GPy 模型
+        
+        # 确保 X 和 y 是有效的
+        if len(X) > 0 and len(y) > 0:
+            X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=test_ratio, random_state=random_seed)
+            st.write("训练集和测试集划分完成。")
+        else:
+            st.warning("特征列或输出列无效，无法划分数据集。")
+
+    
+
+         
        
 
         
@@ -80,7 +137,7 @@ with col2:
         
         # 当选择“是”时，显示数据增强方法和参数
         if use_augmentation == "是":
-                    augmentation_method = st.selectbox("数据增强方法", options=["Bayesian Bootstrap", "Bootstrap","最近邻插值","GAN生成对抗网络", "GMM", "LSTM"], key="augment_method")
+                    augmentation_method = st.selectbox("数据增强方法", options=["Bayesian Bootstrap", "Bootstrap","最近邻插值","GAN生成对抗网络", "GMM"], key="augment_method")
                     augment_factor = st.slider("增强倍数", 1, 10, 3, key="augment_factor")
                     flag_augmentation = 1
         else:
@@ -253,16 +310,7 @@ with col2:
                             X_test = X_test.to_numpy().astype(float)
                         if isinstance(y_test, (pd.Series, pd.DataFrame)):
                             y_test = y_test.to_numpy().astype(float)
-                        # 自定义隐藏层结构
-                        hidden_layer_sizes = st.text_input("隐藏层结构（用英文逗号分隔，例如：10,10）", value="10,10")
-                        status_text.text("如10,10表示有两个隐藏层，每层10个神经元")
-                        hidden_layer_sizes = [int(size.strip()) for size in hidden_layer_sizes.split(",")]
-
-                        # 自定义学习率
-                        alpha = st.number_input("学习率 (alpha)", min_value=0.0001, max_value=1.0, step=0.0001, value=0.01, format="%.4f")
-
-                        # 自定义训练迭代次数
-                        num_epochs = st.number_input("训练迭代次数 (num_epochs)", min_value=1, max_value=100, value=10)
+                    
                         options = {
                             "hidden_layer_sizes": hidden_layer_sizes,  # 隐藏层的结构
                             "alpha": alpha,  # 学习率
