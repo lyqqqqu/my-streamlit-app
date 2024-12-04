@@ -15,6 +15,10 @@ from data_augmentation_regression import (bayes_bootstrap, Bootstrap, neighbor_b
 from smt.surrogate_models import RBF,QP,GENN
 
 from optimize_gaussian_multikernel import optimize_gaussian_multikernel
+import matplotlib
+matplotlib.rcParams['font.sans-serif'] = ['SimHei']     # 显示中文
+# 为了坐标轴负号正常显示。matplotlib默认不支持中文，设置中文字体后，负号会显示异常。需要手动将坐标轴负号设为False才能正常显示负号。
+matplotlib.rcParams['axes.unicode_minus'] = False
 
 # 假设 X_train, y_train, X_test, y_test, feature_columns, output_column 已在其他部分定义
 # 如果未定义，请确保在使用前定义这些变量
