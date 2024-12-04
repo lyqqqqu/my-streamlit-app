@@ -23,6 +23,10 @@ from main_function import (train_model,plot_fitted_curve,plot_scatter,
                            plot_scatter,bayesian_optimize_model,genetic_algorithm_optimize_model)
 
 from main_function import plot_fitness_curve,augment_data
+import matplotlib
+matplotlib.rcParams['font.sans-serif'] = ['SimHei']     # 显示中文
+# 为了坐标轴负号正常显示。matplotlib默认不支持中文，设置中文字体后，负号会显示异常。需要手动将坐标轴负号设为False才能正常显示负号。
+matplotlib.rcParams['axes.unicode_minus'] = False
 # 页面设置
 st.set_page_config(page_title="多元回归预测和分类模块", layout="wide")
 # 标志：仅在第一次加载页面时触发气球
