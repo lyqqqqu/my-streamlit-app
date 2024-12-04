@@ -18,18 +18,17 @@ def gaussian_multikernel_model(X_train, Y_train, X_test):
     返回:
         - Y_pred: 模型对测试数据的预测值
         - results: 每个测试点的预测均值和标准差
+        - model: 训练好的高斯过程模型
     """
-    # X_train = X_train.values  # 转换为 numpy 数组
-    # y_train = y_train.values  # 转换为 numpy 数组
-    # X_test = X_test.values    # 转换为 numpy 数组
-
     # 默认各核函数权重为1
     weights = [1.0, 1.0, 1.0]
 
     # 创建多核函数，权重分别应用于RBF、Matern和Exponential核函数
-    kernel = (GPy.kern.RBF(input_dim=X_train.shape[1], variance=weights[0], lengthscale=1.0) +
-              GPy.kern.Matern32(input_dim=X_train.shape[1], variance=weights[1], lengthscale=1.0) +
-              GPy.kern.Exponential(input_dim=X_train.shape[1], variance=weights[2], lengthscale=1.0))
+    kernel = (
+        GPy.kern.RBF(input_dim=X_train.shape[1], variance=weights[0], lengthscale=1.0) +
+        GPy.kern.Matern32(input_dim=X_train.shape[1], variance=weights[1], lengthscale=1.0) +
+        GPy.kern.Exponential(input_dim=X_train.shape[1], variance=weights[2], lengthscale=1.0)
+    )
 
     # 创建线性均值函数
     mean_function = GPy.mappings.Linear(input_dim=X_train.shape[1], output_dim=1)
@@ -39,9 +38,6 @@ def gaussian_multikernel_model(X_train, Y_train, X_test):
     
     # 设置非常小的噪声方差，防止模型过拟合
     model.Gaussian_noise.variance = 1e-8
-    # print("X_train shape:", X_train.shape)
-    # print("Y_train shape:", Y_train.shape)
-    # print("X_test shape:", X_test.shape)
 
     # 优化模型参数
     model.optimize()
@@ -53,5 +49,4 @@ def gaussian_multikernel_model(X_train, Y_train, X_test):
     # 保存每个测试点的预测均值和标准差
     results = {"mean": Y_pred.flatten(), "std": Y_pred_std.flatten()}
 
-    return Y_pred.flatten(), results
-
+    return Y_pred.flatten(), results, model
