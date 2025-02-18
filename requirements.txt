@@ -15,4 +15,5 @@ deap
 GPyOpt
 tensorflow
 scipy 
-
+lightgbm
+seaborn
