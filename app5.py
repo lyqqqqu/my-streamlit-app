@@ -13,8 +13,8 @@ from data_augmentation_regression import bayes_bootstrap, generate_regressdata_S
 from Regression import gaussian_multikernel_model
 import time;
 from smt.surrogate_models import RBF,QP,GENN
-from optimize_gaussian_multikernel import optimize_gaussian_multikernel
-from sklearn.preprocessing import StandardScaler, MinMaxScaler
+import xgboost as xgb
+from sklearn.preprocessing import StandardScaler, MinMaxScaler,LabelEncoder
 import matplotlib.pyplot as plt
 import seaborn as sns
 from matplotlib.lines import Line2D
@@ -23,14 +23,21 @@ from main_function import (train_model,plot_fitted_curve,plot_scatter,
                            plot_scatter,bayesian_optimize_model,genetic_algorithm_optimize_model)
 
 from main_function import plot_fitness_curve,augment_data
+from optimize_gaussian_multikernel import PSO_gaussian_multikernel,bayesian_gaussian_multikernel,GA_gaussian_multikernel
+from main_function import Classification_Model,plot_classification_results,compute_metrics
+# 页面设置
 import matplotlib
+# matplotlib.font_manager.fontManager.addfont('SimHei.ttf') #临时注册新的全局字体
+
 matplotlib.font_manager.fontManager.addfont('SimHei.ttf') #临时注册新的全局字体
 
 plt.rcParams['font.sans-serif']=['SimHei'] #用来正常显示中文标签
 
 plt.rcParams['axes.unicode_minus']=False#用来正常显示负号
+# plt.rcParams['font.sans-serif']=['SimHei'] #用来正常显示中文标签
 
-# 页面设置
+# plt.rcParams['axes.unicode_minus']=False#用来正常显示负号
+
 st.set_page_config(page_title="多元回归预测和分类模块", layout="wide")
 # 标志：仅在第一次加载页面时触发气球
 if "balloons_shown" not in st.session_state:
@@ -41,16 +48,42 @@ if not st.session_state["balloons_shown"]:
     st.session_state["balloons_shown"] = True  # 设置标志，确保只显示一次
 
 # 在侧边栏显示注意事项
-st.sidebar.title("注意事项")
-st.sidebar.write("""
-1. 请确保正确输入数据集之后，才能点击训练模型按钮。
+# Sidebar Title
+# Sidebar Title
+st.sidebar.title("碳纤维相关背景")
 
-2. 目前该app分类暂时没有模型，回归中优化目前只有高斯多核回归和粒子群结合是有效的，后续将不断完善。
-                 
-3. 高斯多核回归和粒子群结合的决策变量是权重，适应度是误差mape
+# Initialize session state variables for toggling display
+if "show_process" not in st.session_state:
+    st.session_state["show_process"] = False
+if "show_data" not in st.session_state:
+    st.session_state["show_data"] = False
 
-4. 如果遇到问题，可多尝试不同方法的组合解决，或反馈给我。
-""")
+# Toggle button for carbon fiber process image
+if st.sidebar.button("碳纤维生产流程"):
+    st.session_state["show_process"] = not st.session_state["show_process"]
+
+# Toggle button for carbon fiber sample data and feature target image
+if st.sidebar.button("碳纤维样例数据展示"):
+    st.session_state["show_data"] = not st.session_state["show_data"]
+
+# Display content based on session state
+if st.session_state["show_process"]:
+    st.write("### 碳纤维生产流程")
+    st.image("碳纤维全流程.png", caption="碳纤维生产流程", width=1000)
+
+if st.session_state["show_data"]:
+    st.write("### 碳纤维样例数据展示")
+    # Path to the fixed Excel file
+    excel_file_path = "样例数据展示.xlsx"
+
+    # Read the Excel file
+    df = pd.read_excel(excel_file_path)
+
+    # Display the first 5 rows of the data
+    st.dataframe(df.head())
+
+    # Display the feature target image with reduced width
+    st.image("特征图.png", caption="特征目标示意图", width=600)
 # 页面标题
 st.title("多元回归预测和分类模块")
 
@@ -129,16 +162,33 @@ with col1:
                 # 数据划分
                 X = data[feature_columns]
                 y = data[output_column]
-                
+
                 if not X.empty and not y.empty:
+                # 判断是否为分类问题（标签为分类类型）
+                    if y.dtype == 'object' or len(np.unique(y)) <= 20:
+                        is_classification = True
+                        # 编码标签
+                        le = LabelEncoder()
+                        y_encoded = le.fit_transform(y)
+                        label_mapping = dict(zip(le.classes_, le.transform(le.classes_)))
+                        st.write("### 标签编码")
+                        st.write(label_mapping)
+                    else:
+                        is_classification = False
+                        y_encoded = y  # 对于回归任务，不需要编码
+                
                     X_train, X_test, y_train, y_test = train_test_split(
-                        X, y, test_size=test_ratio, random_state=random_seed
+                        X, y_encoded, test_size=test_ratio, random_state=random_seed, stratify=y_encoded if is_classification else None
                     )
-                    st.success("训练集和测试集划分完成。")
-                    # st.write("训练集示例：")
-                    # st.dataframe(X_train.head())
-                    # st.write("测试集示例：")
-                    # st.dataframe(X_test.head())
+                # if not X.empty and not y.empty:
+                #     X_train, X_test, y_train, y_test = train_test_split(
+                #         X, y, test_size=test_ratio, random_state=random_seed
+                #     )
+                #     st.success("训练集和测试集划分完成。")
+                #     # st.write("训练集示例：")
+                #     # st.dataframe(X_train.head())
+                #     # st.write("测试集示例：")
+                #     # st.dataframe(X_test.head())
                 else:
                     st.warning("特征列或输出列无效，无法划分数据集。")
     
@@ -162,6 +212,7 @@ def merge_data(X, y, augmented_X, augmented_y, flag):
 # 中间栏：数据增强 -> 模型选择 -> 优化 -> 训练
 with col2:
     st.header("数据增强、模型选择和优化")
+    st.write("### 问题类型")
     problem_type = st.selectbox("选择问题类型", ["回归", "分类"])
     
     if problem_type == "回归":
@@ -253,26 +304,37 @@ with col2:
                 if optimize_model == "是":
                     if optimize_method == "贝叶斯优化":
                         # 针对特定模型的贝叶斯优化
-                        if model_type in ["线性回归", "高斯过程", "SVM模型", "RBF神经网络", "GENN", "QP二次多项式"]:
-                            # 假设我们有一个通用的贝叶斯优化函数，可优化这些模型的超参数
-                            best_params, fitness_history = bayesian_optimize_model(
-                                X_train, y_train, model_type, bayes_iterations
-                            )
-                            model_options.update(best_params)
-                        else:
-                            st.error("当前模型不支持贝叶斯优化")
-                            raise NotImplementedError("贝叶斯优化尚未为该模型实现")
+                        # if model_type in ["线性回归", "高斯过程", "SVM模型", "RBF神经网络", "GENN", "QP二次多项式"]:
+                        #     # 假设我们有一个通用的贝叶斯优化函数，可优化这些模型的超参数
+                        #     best_params, fitness_history = bayesian_optimize_model(
+                        #         X_train, y_train, model_type, bayes_iterations
+                        #     )
+                        #     model_options.update(best_params)
+                        # else:
+                        #     st.error("当前模型不支持贝叶斯优化")
+                        #     raise NotImplementedError("贝叶斯优化尚未为该模型实现")
+                        if model_type == "高斯多核回归":
+                            lb = [0.1, 0.1, 0.1]  # 根据实际情况定义
+                            ub = [1.0, 1.0, 1.0]
+                            y_pred, best_r2, best_rmse, best_mape, best_decision_variables,fitness_history, best_model = bayesian_gaussian_multikernel(
+                                 X_train, y_train, X_test, y_test, lb, ub, bayes_iterations)
+                    
                     elif optimize_method == "遗传算法":
                         # 针对特定模型的遗传算法优化
-                        if model_type in ["线性回归", "高斯过程", "SVM模型", "RBF神经网络", "GENN", "QP二次多项式"]:
-                            best_params, fitness_history = genetic_algorithm_optimize_model(
-                                X_train, y_train, model_type, population_size, max_iterations
-                            )
-                            model_options.update(best_params)
-                        else:
-                            st.error("当前模型不支持遗传算法优化")
-                            raise NotImplementedError("遗传算法优化尚未为该模型实现")
-                    
+                        # if model_type in ["线性回归", "高斯过程", "SVM模型", "RBF神经网络", "GENN", "QP二次多项式"]:
+                        #     best_params, fitness_history = genetic_algorithm_optimize_model(
+                        #         X_train, y_train, model_type, population_size, bayes_iterations
+                        #     )
+                        #     model_options.update(best_params)
+                        # else:
+                        #     st.error("当前模型不支持遗传算法优化")
+                        #     raise NotImplementedError("遗传算法优化尚未为该模型实现")
+                        if model_type == "高斯多核回归":
+                            y_pred, best_r2, best_rmse, best_mape, best_decision_variables,fitness_history, best_model=GA_gaussian_multikernel(
+                                                    X_train, y_train, X_test, y_test, 
+                                                    lb=[0.1,0.1,0.1], ub=[10,10,10], 
+                                                    max_gen=max_iterations, pop_size=population_size, 
+                                                    cxpb=0.5, mutpb=0.2)
                      
                     elif optimize_method == "粒子群算法":
                         if model_type == "高斯多核回归":
@@ -283,34 +345,36 @@ with col2:
                             X_test = X_test.values if isinstance(X_test, pd.DataFrame) else X_test
                             y_test = y_test.values.reshape(-1, 1) if isinstance(y_test, (pd.Series, pd.DataFrame)) else y_test.reshape(-1, 1)
 
-                            y_pred, best_r2, best_rmse, best_mape, best_decision_variables, fitness_history, best_model = optimize_gaussian_multikernel(
+                            y_pred, best_r2, best_rmse, best_mape, best_decision_variables, fitness_history, best_model = PSO_gaussian_multikernel(
                                 X_train, y_train, X_test, y_test,
                                 lb=[0.1, 0.1, 0.1], ub=[10, 10, 10],
                                 swarmsize=population_size,
                                 maxiter=max_iterations
                             )
-                            # 将优化结果传递给 extra
-                            extra = {
-                                "r2": best_r2,
-                                "rmse": best_rmse,
-                                "mape": best_mape,
-                                "decision_variables": best_decision_variables,
-                                "fitness_history": fitness_history,
-                                "trained_model": best_model
-                            }
+                           
                         else:
                             st.error("粒子群算法仅支持高斯多核回归模型")
                             raise NotImplementedError("粒子群算法仅实现于高斯多核回归模型")
+                      # 将优化结果传递给 extra
+                      
+                    extra = {
+                        "r2": best_r2,
+                        "rmse": best_rmse,
+                        "mape": best_mape,
+                        "decision_variables": best_decision_variables,
+                        "fitness_history": fitness_history,
+                        "trained_model": best_model
+                    }
+                    if "trained_model" in extra and extra["trained_model"] is not None:
+                        st.session_state['trained_model'] = extra["trained_model"]
+                    else:
+                        st.session_state['trained_model'] = None  # 只有在没有训练模型时设置为 None
                 else:
                     # 没有优化的模型训练
                     y_pred, extra = train_model(model_type, X_train, y_train, X_test, y_test, model_options)
                 
                 progress_bar.progress(0.6)  #3
-
-                if "trained_model" in extra and extra["trained_model"] is not None:
-                    st.session_state['trained_model'] = extra["trained_model"]
-                else:
-                    st.session_state['trained_model'] = None  # 只有在没有训练模型时设置为 None
+               
 
                 
                 
@@ -366,8 +430,79 @@ with col2:
             #     status_text.text("模型训练失败")
 
     elif problem_type == "分类":
-        model_type = st.sidebar.selectbox("选择分类模型", options=["SVM", "KNN", "决策树"])
-
+        st.write("### 模型选择")
+        model_type = st.selectbox("选择分类模型", options=["逻辑回归", "KNN", "决策树","bagging","随机森林","Extra Trees","AdaBoost","GBDT","VOTE模型","xgboost","lightgbm"])
+          # 按钮 - 训练模型
+        if st.button("训练模型"):
+            with st.spinner("正在训练模型..."):
+                model, y_pred, y_prob = Classification_Model(
+                    model_type, X_train, y_train, X_test, y_test
+                )
+            st.success("模型训练完成！")
+            
+            # 计算评价指标
+            metrics = compute_metrics(y_test, y_pred, y_prob)
+            
+            # 展示评价指标
+            st.subheader("评价指标")
+            metrics_df = pd.DataFrame.from_dict(metrics, orient='index', columns=['值'])
+            st.table(metrics_df)
+            
+            # 绘制并展示混淆矩阵和ROC曲线
+            fig_cm, fig_roc = plot_classification_results(y_test, y_pred, y_prob, title_suffix=f"({model_type})")
+            
+            st.subheader("混淆矩阵")
+            st.pyplot(fig_cm)
+            
+            if y_prob is not None and y_prob.ndim == 2 and y_prob.shape[1] == 2:
+                st.subheader("ROC曲线")
+                st.pyplot(fig_roc)
+            
+            # 可选：展示特征重要性（仅适用于树模型）
+            if model_type in ["随机森林", "Extra Trees", "GBDT", "lightgbm", "xgboost", "VOTE模型"]:
+                st.subheader("特征重要性")
+                feature_imp = None
+                if model_type == "lightgbm":
+                    importance = model.feature_importances_
+                    feature_imp = pd.DataFrame({
+                        'feature': feature_columns,
+                        'importance': importance
+                    }).sort_values(by='importance', ascending=False)
+                elif model_type == "xgboost":
+                    importance = model.feature_importances_
+                    
+                    xgb.plot_importance(model)
+                    feature_imp = pd.DataFrame({
+                        'feature': feature_columns,
+                        'importance': importance
+                    }).sort_values(by='importance', ascending=False)
+                elif model_type == "VOTE模型":
+                    # 对于VotingClassifier，可以提取各个基模型的特征重要性并取平均
+                    importances = []
+                    for estimator in model.estimators_:
+                        if hasattr(estimator, 'feature_importances_'):
+                            importances.append(estimator.feature_importances_)
+                    if importances:
+                        avg_importance = np.mean(importances, axis=0)
+                        feature_imp = pd.DataFrame({
+                            'feature': feature_columns,
+                            'importance': avg_importance
+                        }).sort_values(by='importance', ascending=False)
+                else:
+                    if hasattr(model, 'feature_importances_'):
+                        importance = model.feature_importances_
+                        feature_imp = pd.DataFrame({
+                            'feature': feature_columns,
+                            'importance': importance
+                        }).sort_values(by='importance', ascending=False)
+                
+                if feature_imp is not None:
+                    fig_imp, ax_imp = plt.subplots(figsize=(10, 6))
+                    sns.barplot(x='importance', y='feature', data=feature_imp.head(20), ax=ax_imp)
+                    ax_imp.set_title('特征重要性')
+                    st.pyplot(fig_imp)
+                else:
+                    st.write("当前模型不支持特征重要性展示。")
 # 右侧栏：预测模块
 with col3:
     st.header("预测模块")
