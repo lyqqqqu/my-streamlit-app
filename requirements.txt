@@ -13,3 +13,7 @@ openpyxl
 xgboost
 deap
 GPyOpt
+tensorflow
+scipy 
+imblearn
+time
