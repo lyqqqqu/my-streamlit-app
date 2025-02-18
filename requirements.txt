@@ -11,3 +11,4 @@ imbalanced-learn
 smt
 openpyxl
 xgboost
+deap
