@@ -12,3 +12,4 @@ smt
 openpyxl
 xgboost
 deap
+GPyOpt
