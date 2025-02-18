@@ -10,3 +10,4 @@ pyswarm
 imbalanced-learn
 smt
 openpyxl
+xgboost
