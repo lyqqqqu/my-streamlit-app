@@ -15,5 +15,4 @@ deap
 GPyOpt
 tensorflow
 scipy 
-imblearn
 
