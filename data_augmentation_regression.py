@@ -82,7 +82,7 @@ import numpy as np
 import pandas as pd
 from sklearn.neighbors import NearestNeighbors
 
-def neighbor_based_interpolation(features, targets, expansion_factor, n_neighbors):
+def neighbor_based_interpolation(features, targets, expansion_factor, n_neighbors=5):
     """
     基于最近邻的插值方法生成新样本，通过扩充倍数的方式生成新样本。
     :param features: 特征数据，DataFrame 格式
